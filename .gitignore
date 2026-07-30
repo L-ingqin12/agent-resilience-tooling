@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Shell backup files
+*.bak
+*.tmp
+
+# Checkpoint files (runtime state, not source)
+checkpoints.jsonl
+circuit_breaker.json
+
+# Editor
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent runtime
+.agent/
