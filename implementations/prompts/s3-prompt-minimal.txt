@@ -1,0 +1,13 @@
+# S3 Minimal Prompt (~100 tokens)
+# Target: Frameworks with custom tool support (ensure_directory, ensure_file, safe_remove)
+# Usage: Paste into agents.md AFTER deploying agent-safe-fs.sh
+# Protection rate: ~85% (tools handle most edge cases)
+
+FILE OPERATIONS (CRITICAL):
+- Use `ensure_directory`, `ensure_file`, `safe_remove` from ~/.agent/safe-fs.sh
+- FIRST: `source ~/.agent/safe-fs.sh && source ~/.agent/agent-checkpoint.sh`
+- NEVER use bare `mkdir`, `rm`, `dd`, or `cat >` for file operations
+- All these tools return JSON with `ok` field — check it
+- If `error.retryable` = false → report to user and STOP
+- If tool returns EMPTY (no JSON) → system may be crashing, STOP immediately
+- Use `checkpoint_skip_if_completed` before redoing any file operation

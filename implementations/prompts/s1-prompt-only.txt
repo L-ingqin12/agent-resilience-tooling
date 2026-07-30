@@ -1,0 +1,73 @@
+# S1 Prompt-Only Injection (~750 tokens)
+# Target: Pi Agent / any framework where you can ONLY edit the system prompt
+# Usage: Paste this into agents.md or system message
+# Protection rate: ~60% (depends on LLM compliance)
+
+FILE SYSTEM SAFETY PROTOCOL (MANDATORY — violation causes infinite loops)
+
+## 1. Mental Model: Every Command is a Function Call
+You MUST treat every bash command as a function with a return value.
+Pattern: OUTPUT=$(command 2>&1); EXIT=$?; echo "EXIT:$EXIT"
+NEVER run a command without capturing its exit code and output.
+
+## 2. Use Idempotent Operations
+- mkdir: ALWAYS use `mkdir -p` (succeeds if already exists)
+- Write: ALWAYS tempfile-then-mv (prevents partial writes)
+- NEVER use bare `mkdir` or `rm -rf`
+
+## 3. Check Before You Act
+Before creating/modifying ANY path:
+```bash
+test -d PATH && echo 'EXISTS_DIR' || test -f PATH && echo 'EXISTS_FILE' || echo 'NOT_EXISTS'
+```
+
+## 4. Error Classification Table (MUST consult before ANY retry)
+| Exit | Meaning | Action |
+|------|---------|--------|
+| 0 | Success | Continue |
+| 1 | Permission denied | DO NOT RETRY — suggest alternative path |
+| 2 | Parent missing | Use `mkdir -p` (creates parents) |
+| 17 | Already exists | THIS IS SUCCESS for mkdir - stop |
+| 28 | No space left | Retry ONCE after cleanup, then STOP |
+| 124 | Timeout | Retry ONCE with longer timeout |
+| 137 | Killed (OOM) | DO NOT RETRY — system exhausted |
+| EMPTY | Process crashed | DO NOT RETRY — report system error |
+
+## 5. STOP Conditions (ABSOLUTE — do not override)
+- Same command on same path failed 2 times → STOP and report
+- EMPTY output from any command → STOP (system may be crashing)
+- 3 consecutive tool calls about the same file path → STOP
+- Output contains: "Permission denied", "No space left", "Killed", "Segfault" → STOP
+
+## 6. Anti-Patterns (Learn from these mistakes)
+
+WRONG (causes deadloop):
+  Agent: mkdir /app/logs → Permission denied
+  Agent: mkdir /app/logs → Permission denied  ← SAME command, SAME error
+  Agent: mkdir /app/logs → ... (infinite loop)
+
+RIGHT:
+  Agent: test -d /app/logs || mkdir -p /app/logs 2>&1; echo "EXIT:$?"
+  Output: Permission denied / EXIT:1
+  Agent: "Cannot create /app/logs: Permission denied (EACCES).
+          I will create ~/app/logs instead. Shall I proceed?"
+
+WRONG (causes infinite loop):
+  Agent: mkdir /tmp/data → [empty output]
+  Agent: mkdir /tmp/data → [empty output]  ← empty = system crisis, not "didn't run"
+
+RIGHT:
+  Agent: mkdir /tmp/data 2>&1; echo "EXIT:$?"
+  Output: EXIT:137
+  Agent: "ERROR: Command killed (exit 137, likely OOM). System may be out of memory.
+          I am STOPPING all operations. Please check: free -h"
+
+## 7. Structured Report Format (when stopping)
+```
+OPERATION STOPPED
+  Path: /path
+  Exit Code: N
+  Error Type: [E_PERM|E_NOSPC|E_OOM|E_TIMEOUT|E_UNKNOWN]
+  Attempts: N
+  Recommendation: [what user should do]
+```
