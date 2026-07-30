@@ -167,7 +167,14 @@ checkpoint_verify() {
 
     post_state=$(echo "$line" | grep -o '"post_state":"[^"]*"' | sed 's/"post_state":"//;s/"//')
     goal=$(echo "$line" | grep -o '"goal":"[^"]*"' | sed 's/"goal":"//;s/"//')
-    path=$(echo "$goal" | grep -o '/[^ ]*' | head -1)
+    # Robust path extraction: try goal first, then undo field as fallback
+    path=$(echo "$goal" | grep -o '/[^" ]*' | head -1)
+    if [ -z "$path" ]; then
+        # Fallback: extract path from undo command (e.g., "rmdir /tmp/foo")
+        local undo
+        undo=$(echo "$line" | grep -o '"undo":"[^"]*"' | sed 's/"undo":"//;s/"//')
+        path=$(echo "$undo" | grep -o '/[^" ]*' | head -1)
+    fi
 
     case "$post_state" in
         directory)
