@@ -41,6 +41,7 @@ agent-resilience-tooling/
 │   └── strategy-router.md                       # ✅ 多策略路由器 (含Circuit Breaker)
 │
 ├── docs/
+│   ├── core-insight.md                          # ⭐ LLM自知不可靠性 + 系统兜底 = 最优解
 │   ├── architecture-overview.md                 # ✅ 六层架构总览 + 数据流 + Recovery流
 │   ├── explore-findings-intermediate.md         # ✅ 调研中间产物 (3个Explore子智能体)
 │   ├── scenario-matrix.md                       # ✅ 多场景矩阵 S0-S6 (按控制面选用)
