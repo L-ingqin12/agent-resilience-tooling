@@ -302,19 +302,37 @@ checkpoint_recover() {
 # ─── Checkpoint Detect Deadloop ──────────────────────────────────
 checkpoint_detect_deadloop() {
     # Usage: checkpoint_detect_deadloop <goal> <approach>
-    # Detects if the same goal+approach has been attempted multiple times.
-    # Returns the deadloop checkpoint seq if found, empty otherwise.
+    # Detects deadloop in two ways:
+    #   1. Same goal+approach appears in ≥2 separate entries (naive retry)
+    #   2. A single entry has state=deadloop and ≥2 attempts (self-reported)
     local goal="${1:-}" approach="${2:-}"
     local count
-    count=$(grep -c "\"goal\":\"$goal\".*\"approach\":\"$approach\"" "$CHECKPOINT_FILE" 2>/dev/null || echo "0")
 
-    if [ "$count" -ge 2 ]; then
-        # Confirmed deadloop — same goal + same approach ≥ 2 times
+    # Method 1: Count entries with same goal+approach
+    count=$(grep -c "\"goal\":\"$goal\".*\"approach\":\"$approach\"" "$CHECKPOINT_FILE" 2>/dev/null || echo "0")
+    # Handle grep -c returning "filename:count" format
+    count="${count##*:}"
+
+    if [ "$count" -ge 2 ] 2>/dev/null; then
         local last_attempt
         last_attempt=$(grep "\"goal\":\"$goal\".*\"approach\":\"$approach\"" "$CHECKPOINT_FILE" 2>/dev/null | tail -1)
-        echo "$last_attempt" | grep -o '"seq":[0-9]*' | grep -o '[0-9]*'
+        echo "$last_attempt" | grep -o '"seq":[0-9]*' | grep -o '[0-9]*' | head -1
         return 0
     fi
+
+    # Method 2: Check for self-reported deadloop entries (state=deadloop with attempts)
+    local deadloop_entry
+    deadloop_entry=$(grep "\"goal\":\"$goal\"" "$CHECKPOINT_FILE" 2>/dev/null | grep '"state":"deadloop"' | tail -1)
+    if [ -n "$deadloop_entry" ]; then
+        local attempt_count
+        attempt_count=$(echo "$deadloop_entry" | grep -o '"attempt":[0-9]*' | wc -l)
+        attempt_count="${attempt_count##* }"  # Trim leading spaces
+        if [ "${attempt_count:-0}" -ge 2 ] 2>/dev/null; then
+            echo "$deadloop_entry" | grep -o '"seq":[0-9]*' | grep -o '[0-9]*' | head -1
+            return 0
+        fi
+    fi
+
     return 1
 }
 
